@@ -1,52 +1,87 @@
+require('dotenv').config()
 const TelegramBot = require('node-telegram-bot-api')
-let fs = require('fs')
-let https = require('https')
+let Promise = require('bluebird')
+let rp = require('request-promise')
 
 let file = 'bot_token'
-let token = fs.readFileSync(file, 'utf-8')
-//console.log(token)
+let token = process.env.BOT_TOKEN
 
 const bot = new TelegramBot(token, { polling: true })
 
-bot.onText(/\/echo (.+)/, (msg, match) => {
-    // 'msg' is the received Message from Telegram
-    // 'match' is the result of executing the regexp above on the text content
-    // of the message
-
-    const chatId = msg.chat.id
-    const resp = match[1] // the captured "whatever"
-
-    // send back the matched "whatever" to the chat
-    bot.sendMessage(chatId, resp)
+bot.on('polling_error', error => {
+    console.log(error)
 })
 
 bot.onText(/\/anime (.+)/, (msg, match) => {
     const chatId = msg.chat.id
     const query = match[1]
-    //console.log(query)
+    
     let url = 'https://kitsu.io/api/edge/anime?page[limit]=5&filter[text]=' + query
-    https.get(url, resp => {
-        let data = ''
-        resp.on("data", function (chunk) {
-            data += chunk;
+
+    var options = {
+        url: url,
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json, application/vnd.api+json',
+            'Accept-Charset': 'utf-8',
+        }
+    }
+    let entries = []
+    rp(options).then(response => {
+        let obj = JSON.parse(response)
+        let promises = []
+        obj.data.forEach((entry, index) => {
+            let name = entry.attributes.titles.en
+            let rating = entry.attributes.averageRating
+            let numberEpisodes = entry.attributes.episodeCount
+            let status = entry.attributes.status
+
+            let singleShow = {
+                name: name,
+                rating: rating,
+                episodes: numberEpisodes,
+                status: status
+            }
+
+            entries[index] = singleShow
+            promises.push(getGenres(entry.relationships.genres.links.related))
         })
 
-        resp.on('end', () => {
-            let dataJson = JSON.parse(data)
-            let results = dataJson.data
-            let finalMessage = ''
-            results.forEach(result => {
-                let id = result.id
-                let name = result.attributes.titles.en
-                let rating = result.attributes.averageRating
-                let numberEpisodes = result.attributes.episodeCount
-                if(name != undefined)
-                    finalMessage += '*' + name + '*\nRating: ' + rating + '\nEpisodes: ' + numberEpisodes + '\n\n'
+        return Promise.all(promises)
+    })
+        .then(presponse => {
+            presponse.forEach((entry, index) => {
+                let obj = JSON.parse(entry)
+                let genres = []
+                obj.data.forEach(genre => {
+                    genres.push(genre.attributes.name)
+                })
+                entries[index].genres = genres
             })
-            bot.sendMessage(chatId, finalMessage, {
-                parse_mode: 'markdown'
+
+            let messageBody = ''
+            entries.forEach(entry => {
+                messageBody += '*' + entry.name + '*\nStatus: ' + entry.status 
+                    + '\nRating: ' + (entry.rating ? entry.rating : 'N/A') + '\nEpisodes: ' + entry.episodes + '\nGenres: '
+                entry.genres.forEach((genre, subindex) => {
+                    messageBody += genre +  (subindex !== (entry.genres.length - 1) ? ', ' : '')
+                })
+                messageBody += '\n\n'
+             })
+            bot.sendMessage(chatId, messageBody, {
+                parse_mode: 'Markdown'
             })
         })
-    })
-    //bot.sendMessage(chatId, 'You\'re looking for ' + query + ', right?')
 })
+
+function getGenres(url) {
+    var options = {
+        method: 'GET',
+        url: url,
+        headers: {
+            'Accept': 'application/json, application/vnd.api+json',
+            'Accept-Charset': 'utf-8',
+        }
+    }
+    return rp(options)
+}

@@ -88,3 +88,4 @@ typings/
 
 # Personal stuff
 bot_token
+.env
