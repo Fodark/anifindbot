@@ -3,7 +3,6 @@ const TelegramBot = require('node-telegram-bot-api')
 let Promise = require('bluebird')
 let rp = require('request-promise')
 
-let file = 'bot_token'
 let token = process.env.BOT_TOKEN
 
 const bot = new TelegramBot(token, { polling: true })
@@ -12,10 +11,7 @@ bot.on('polling_error', error => {
     console.log(error)
 })
 
-bot.onText(/\/anime (.+)/, (msg, match) => {
-    const chatId = msg.chat.id
-    const query = match[1]
-    
+function getInfos(chatId, query, callback) {
     let url = 'https://kitsu.io/api/edge/anime?page[limit]=5&filter[text]=' + query
 
     var options = {
@@ -58,20 +54,30 @@ bot.onText(/\/anime (.+)/, (msg, match) => {
                 })
                 entries[index].genres = genres
             })
-
-            let messageBody = ''
-            entries.forEach(entry => {
-                messageBody += '*' + entry.name + '*\nStatus: ' + entry.status 
-                    + '\nRating: ' + (entry.rating ? entry.rating : 'N/A') + '\nEpisodes: ' + entry.episodes + '\nGenres: '
-                entry.genres.forEach((genre, subindex) => {
-                    messageBody += genre +  (subindex !== (entry.genres.length - 1) ? ', ' : '')
-                })
-                messageBody += '\n\n'
-             })
-            bot.sendMessage(chatId, messageBody, {
-                parse_mode: 'Markdown'
-            })
+            callback(chatId, entries)
         })
+}
+
+function sendInChat(chatId, entries) {
+    let messageBody = ''
+    entries.forEach(entry => {
+        messageBody += '*' + entry.name + '*\nStatus: ' + entry.status
+            + '\nRating: ' + (entry.rating ? entry.rating : 'N/A') + '\nEpisodes: ' + entry.episodes + '\nGenres: '
+        entry.genres.forEach((genre, subindex) => {
+            messageBody += genre + (subindex !== (entry.genres.length - 1) ? ', ' : '')
+        })
+        messageBody += '\n\n'
+    })
+    bot.sendMessage(chatId, messageBody, {
+        parse_mode: 'Markdown'
+    })
+}
+ 
+bot.onText(/\/anime (.+)/, (msg, match) => {
+    const chatId = msg.chat.id
+    const query = match[1]
+
+    getInfos(chatId, query, sendInChat)
 })
 
 function getGenres(url) {
