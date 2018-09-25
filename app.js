@@ -11,6 +11,18 @@ bot.on('polling_error', error => {
     console.log(error)
 })
 
+function getGenres(url) {
+    var options = {
+        method: 'GET',
+        url: url,
+        headers: {
+            'Accept': 'application/json, application/vnd.api+json',
+            'Accept-Charset': 'utf-8',
+        }
+    }
+    return rp(options)
+}
+
 function getInfos(chatId, query, callback) {
     let url = 'https://kitsu.io/api/edge/anime?page[limit]=5&filter[text]=' + query
 
@@ -27,13 +39,17 @@ function getInfos(chatId, query, callback) {
         let obj = JSON.parse(response)
         let promises = []
         obj.data.forEach((entry, index) => {
+            let id = entry.id
             let name = entry.attributes.titles.en
+            let name_en_jp = entry.attributes.titles.en_jp
+            let name_jp = entry.attributes.titles.ja_jp
             let rating = entry.attributes.averageRating
             let numberEpisodes = entry.attributes.episodeCount
             let status = entry.attributes.status
 
             let singleShow = {
-                name: name,
+                id: id,
+                name: name || name_en_jp || name_jp,
                 rating: rating,
                 episodes: numberEpisodes,
                 status: status
@@ -72,7 +88,31 @@ function sendInChat(chatId, entries) {
         parse_mode: 'Markdown'
     })
 }
- 
+
+function answerInline(queryid, entries) {
+    let results = []
+    let messageBody = ''
+    entries.forEach(element => {
+        messageBody = ''
+        messageBody += '*' + element.name + '*\nStatus: ' + element.status
+            + '\nRating: ' + (element.rating ? element.rating : 'N/A') + '\nEpisodes: ' + element.episodes + '\nGenres: '
+        element.genres.forEach((genre, subindex) => {
+            messageBody += genre + (subindex !== (element.genres.length - 1) ? ', ' : '')
+        })
+
+        results.push({
+            type: 'article',
+            id: element.id,
+            title: element.name,
+            input_message_content: {
+                message_text: messageBody,
+                parse_mode: 'Markdown'
+            }
+        })
+    })
+    bot.answerInlineQuery(queryid, results)
+}
+
 bot.onText(/\/anime (.+)/, (msg, match) => {
     const chatId = msg.chat.id
     const query = match[1]
@@ -80,14 +120,7 @@ bot.onText(/\/anime (.+)/, (msg, match) => {
     getInfos(chatId, query, sendInChat)
 })
 
-function getGenres(url) {
-    var options = {
-        method: 'GET',
-        url: url,
-        headers: {
-            'Accept': 'application/json, application/vnd.api+json',
-            'Accept-Charset': 'utf-8',
-        }
-    }
-    return rp(options)
-}
+bot.on('inline_query', query => {
+    let searchTerm = query.query.trim()
+    getInfos(query.id, searchTerm, answerInline)
+})
