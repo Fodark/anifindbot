@@ -47,6 +47,7 @@ function getInfos(chatId, query, callback) {
             let numberEpisodes = entry.attributes.episodeCount
             let status = entry.attributes.status
             let thumbnail = entry.attributes.posterImage.tiny
+            let thumbnail_medium = entry.attributes.posterImage.medium
 
             let singleShow = {
                 id: id,
@@ -54,7 +55,8 @@ function getInfos(chatId, query, callback) {
                 rating: rating,
                 episodes: numberEpisodes,
                 status: status,
-                thumbnail: thumbnail
+                thumbnail: thumbnail,
+                thumbnail_medium: thumbnail_medium
             }
 
             entries[index] = singleShow
@@ -101,7 +103,7 @@ function answerInline(queryid, entries) {
         element.genres.forEach((genre, subindex) => {
             messageBody += genre + (subindex !== (element.genres.length - 1) ? ', ' : '')
         })
-        messageBody += '\nPoster: [link](' + element.thumbnail + ')'
+        messageBody += '\nPoster: [link](' + element.thumbnail_medium + ')'
 
         results.push({
             type: 'article',
