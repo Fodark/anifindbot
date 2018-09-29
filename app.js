@@ -4,6 +4,7 @@ let Promise = require('bluebird')
 let rp = require('request-promise')
 
 let token = process.env.TOKEN
+console.log('mytoken? ' + token)
 let bot
 
 if(process.env.NODE_ENV === 'production') {
