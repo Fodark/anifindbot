@@ -3,9 +3,18 @@ const TelegramBot = require('node-telegram-bot-api')
 let Promise = require('bluebird')
 let rp = require('request-promise')
 
-let token = process.env.BOT_TOKEN
+let token = process.env.TOKEN
+let bot
 
-const bot = new TelegramBot(token, { polling: true })
+if(process.env.NODE_ENV === 'production') {
+    bot = new TelegramBot(token)
+    bot.setWebHook(process.env.HEROKU_URL + token)
+} else {
+    bot = new TelegramBot(token, { polling: true })
+}
+
+console.log('bot active in env ' + process.env.NODE_ENV)
+
 
 bot.on('polling_error', error => {
     console.log(error)
