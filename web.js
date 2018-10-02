@@ -3,6 +3,8 @@ const bodyParser = require('body-parser')
 const packageInfo = require('./package.json')
 
 const app = express()
+app.use(bodyParser.json())
+
 app.get('/', (req, res) => {
     res.json({ version: packageInfo.version })
 })
