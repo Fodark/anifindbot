@@ -1,21 +1,18 @@
-require('dotenv').config()
-const TelegramBot = require('node-telegram-bot-api')
+const token = process.env.TOKEN
 let Promise = require('bluebird')
 let rp = require('request-promise')
 
-let token = process.env.TOKEN
-console.log('mytoken? ' + token)
+const Bot = require('node-telegram-bot-api')
 let bot
 
-if(process.env.NODE_ENV === 'production') {
-    bot = new TelegramBot(token)
-    bot.setWebHook(process.env.HEROKU_URL + token)
+if (process.env.NODE_ENV === 'production') {
+    bot = new Bot(token)
+    bot.setWebHook(process.env.HEROKU_URL + bot.token)
 } else {
-    bot = new TelegramBot(token, { polling: true })
+    bot = new Bot(token, { polling: true })
 }
 
-console.log('bot active in env ' + process.env.NODE_ENV)
-
+console.log('Started in env: ' + process.env.NODE_ENV)
 
 bot.on('polling_error', error => {
     console.log(error)
@@ -140,3 +137,5 @@ bot.on('inline_query', query => {
     let searchTerm = query.query.trim()
     getInfos(query.id, searchTerm, answerInline)
 })
+
+module.exports = bot
