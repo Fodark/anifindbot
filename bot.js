@@ -1,6 +1,6 @@
 const token = process.env.TOKEN
-let Promise = require('bluebird')
 let rp = require('request-promise')
+const fetch = require('node-fetch')
 
 const Bot = require('node-telegram-bot-api')
 let bot
@@ -18,124 +18,134 @@ bot.on('polling_error', error => {
     console.log(error)
 })
 
+let headers = {
+    'Accept': 'application/json, application/vnd.api+json',
+    'Accept-Charset': 'utf-8',
+}
+
 function getGenres(url) {
-    var options = {
-        method: 'GET',
-        url: url,
-        headers: {
-            'Accept': 'application/json, application/vnd.api+json',
-            'Accept-Charset': 'utf-8',
-        }
+    return fetch(url, { 
+        headers: headers 
+    })
+    .then(res => {
+        return res.json()
+    })
+    .then(data => {
+        let genres = []
+        data.data.forEach(elem => {
+            genres.push(elem.attributes.name)
+        })
+        return genres
+    })
+}
+
+function generateShow(rawData) {
+    let name_canon = rawData.attributes.canonicalTitle
+    let name_en = rawData.attributes.titles.en
+    let name_en_jp = rawData.attributes.titles.en_jp
+    let name_jp = rawData.attributes.titles.ja_jp
+
+    let show = {
+        id: rawData.id,
+        name: name_canon || name_en || name_en_jp || name_jp,
+        rating: rawData.attributes.averageRating,
+        numberEpisodes: rawData.attributes.episodeCount,
+        status: rawData.attributes.status,
+        thumbnail: rawData.attributes.posterImage.tiny,
+        thumbnail_medium: rawData.attributes.posterImage.medium,
+        genres_url: rawData.relationships.genres.links.related,
+        synopsis: rawData.attributes.synopsis.split('\r')[0] + '...'
     }
-    return rp(options)
+
+    return show
 }
 
-function getInfos(chatId, query, callback) {
-    let url = 'https://kitsu.io/api/edge/anime?page[limit]=5&filter[text]=' + query
-
-    var options = {
-        url: url,
-        method: 'GET',
-        headers: {
-            'Accept': 'application/json, application/vnd.api+json',
-            'Accept-Charset': 'utf-8',
-        }
-    }
-    let entries = []
-    rp(options).then(response => {
-        let obj = JSON.parse(response)
-        let promises = []
-        obj.data.forEach((entry, index) => {
-            let id = entry.id
-            let name = entry.attributes.titles.en
-            let name_en_jp = entry.attributes.titles.en_jp
-            let name_jp = entry.attributes.titles.ja_jp
-            let rating = entry.attributes.averageRating
-            let numberEpisodes = entry.attributes.episodeCount
-            let status = entry.attributes.status
-            let thumbnail = entry.attributes.posterImage.tiny
-            let thumbnail_medium = entry.attributes.posterImage.medium
-
-            let singleShow = {
-                id: id,
-                name: name || name_en_jp || name_jp,
-                rating: rating,
-                episodes: numberEpisodes,
-                status: status,
-                thumbnail: thumbnail,
-                thumbnail_medium: thumbnail_medium
-            }
-
-            entries[index] = singleShow
-            promises.push(getGenres(entry.relationships.genres.links.related))
-        })
-
-        return Promise.all(promises)
-    })
-        .then(presponse => {
-            presponse.forEach((entry, index) => {
-                let obj = JSON.parse(entry)
-                let genres = []
-                obj.data.forEach(genre => {
-                    genres.push(genre.attributes.name)
-                })
-                entries[index].genres = genres
-            })
-            callback(chatId, entries)
-        })
-}
-
-function sendInChat(chatId, entries) {
-    let messageBody = ''
-    entries.forEach(entry => {
-        messageBody += '*' + entry.name + '*\nStatus: ' + entry.status
-            + '\nRating: ' + (entry.rating ? entry.rating : 'N/A') + '\nEpisodes: ' + entry.episodes + '\nGenres: '
-        entry.genres.forEach((genre, subindex) => {
-            messageBody += genre + (subindex !== (entry.genres.length - 1) ? ', ' : '')
-        })
-        messageBody += '\n\n'
-    })
-    bot.sendMessage(chatId, messageBody, {
-        parse_mode: 'Markdown'
-    })
-}
-
-function answerInline(queryid, entries) {
+function getMatching(query, limit) {
     let results = []
-    let messageBody = ''
-    entries.forEach(element => {
-        messageBody = ''
-        messageBody += '*' + element.name + '*\nStatus: ' + element.status
-            + '\nRating: ' + (element.rating ? element.rating : 'N/A') + '\nEpisodes: ' + element.episodes + '\nGenres: '
-        element.genres.forEach((genre, subindex) => {
-            messageBody += genre + (subindex !== (element.genres.length - 1) ? ', ' : '')
-        })
-        messageBody += '\nPoster: [link](' + element.thumbnail_medium + ')'
+    let url = `https://kitsu.io/api/edge/anime?page[limit]=${limit}&filter[text]=${query}`
 
-        results.push({
-            type: 'article',
-            id: element.id,
-            title: element.name,
-            thumb_url: element.thumbnail,
-            input_message_content: {
-                message_text: messageBody,
-                parse_mode: 'Markdown'
-            }
-        })
+    return fetch(url, {
+        headers: headers
     })
-    bot.answerInlineQuery(queryid, results)
+    .then(res => {
+        return res.json()
+    })
+    .then(data => {
+        let genresPromises = []
+        data.data.forEach(elem => {
+            let show = generateShow(elem)
+            results.push(show)
+            genresPromises.push(getGenres(show.genres_url))
+        })
+        return Promise.all(genresPromises)
+    })
+    .then(genresPromises => {
+        genresPromises.forEach((genres, index) => {
+            results[index].genres = genres
+        })
+
+        return results
+    })
 }
 
-bot.onText(/\/anime (.+)/, (msg, match) => {
-    const chatId = msg.chat.id
-    const query = match[1]
+function generateMessageBody(show) {
+    let rating = show.rating || 'N/A'
 
-    getInfos(chatId, query, sendInChat)
+    let message = 
+        `📺 *Name:* [${show.name}](${show.thumbnail_medium})\n` +
+        `✔️ *Status:* ${show.status}\n` +
+        `💹 *Rating:* ${rating}\n` +
+        `#️⃣ *Episodes:* ${show.numberEpisodes}\n` +
+        `❇️ *Genres:* ${show.genres.toString()}\n` +
+        `📚 *Synopsis:* ${show.synopsis}`
+
+    return message
+}
+
+bot.on('message', (msg) => {
+    const chatId = msg.chat.id
+    let query = msg.text.trim()
+    getMatching(query, 3)
+    .then(results => {
+        results.forEach(result => {
+            let message = generateMessageBody(result)
+            bot.sendMessage(chatId, message, {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [[{
+                        text: '',
+                        switch_inline_query: 'share'
+                    }]]
+                }
+            })
+        })
+        
+    })
+    
 })
 
 bot.on('inline_query', query => {
     let searchTerm = query.query.trim()
-    getInfos(query.id, searchTerm, answerInline)
+    let queryId = query.id
+    getMatching(searchTerm, 5)
+    .then(results => {
+        let response = []
+        results.forEach(result => {
+            response.push({
+                type: 'article',
+                id: result.id,
+                title: result.name,
+                description: result.synopsis,
+                thumb_url: result.thumbnail,
+                input_message_content: {
+                    message_text: generateMessageBody(result),
+                    parse_mode: 'Markdown'
+                }
+            })
+        })
+
+        bot.answerInlineQuery(queryId, response)
+    })
 })
 
 module.exports = bot

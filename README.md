@@ -3,8 +3,8 @@ A telegram bot (@anifindbot) written in Node.js that sends info about a set of a
 
 ## Usage
 ### Direct chat
-- /anime search_term
-Sends a message with the first five anime that match the query
+- search_term
+Sends a message with the first three anime that match the query and a button to instantly share them!
 
 ### Inline 
 - @anifindbot search_term
