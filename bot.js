@@ -1,5 +1,4 @@
 const token = process.env.TOKEN
-let rp = require('request-promise')
 const fetch = require('node-fetch')
 
 const Bot = require('node-telegram-bot-api')

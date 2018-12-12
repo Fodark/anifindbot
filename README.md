@@ -1,3 +1,5 @@
+[![CodeFactor](https://www.codefactor.io/repository/github/fodark/anifindbot/badge)](https://www.codefactor.io/repository/github/fodark/anifindbot)
+
 # Anifindbot
 A telegram bot (@anifindbot) written in Node.js that sends info about a set of anime (if answered directly) or a single one (if used inline)
 
