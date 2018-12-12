@@ -1,6 +1,9 @@
 # Anifindbot
 A telegram bot (@anifindbot) written in Node.js that sends info about a set of anime (if answered directly) or a single one (if used inline)
 
+## Changelog
+12/12/2018 Released v2.0
+
 ## Usage
 ### Direct chat
 - search_term
