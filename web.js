@@ -1,5 +1,4 @@
 const express = require('express')
-const bodyParser = require('body-parser')
 const packageInfo = require('./package.json')
 
 const app = express()
